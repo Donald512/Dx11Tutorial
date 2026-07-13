@@ -11,32 +11,33 @@ namespace Graphics{
 
     bool Initialize(HWND hWnd) {
         DXGI_SWAP_CHAIN_DESC sd = {};
+        sd.BufferCount = 1;         // 1 back buffer + 1 front buffer
         sd.BufferDesc.Width = 0;   // 0 means pick up window width automatically
         sd.BufferDesc.Height = 0;  // 0 means pick up window height automatically
         sd.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; // Standard 32-bit color channel
+        // match the desktop refresh rate automatically 
+        // it is normally numerator/denominator, so if .num = 60 and .denom = 1, it is 60hz but setting to 0 gives default
         sd.BufferDesc.RefreshRate.Numerator = 0;
-        sd.BufferDesc.RefreshRate.Denominator = 0;
-        sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-        sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-        
+        sd.BufferDesc.RefreshRate.Denominator = 0;  
+        sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        sd.OutputWindow = hWnd; 
         // No anti-aliasing multi-sampling for now
         sd.SampleDesc.Count = 1;
         sd.SampleDesc.Quality = 0;
-        
-        sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        sd.BufferCount = 1;         // 1 back buffer + 1 front buffer
-        sd.OutputWindow = hWnd;     // Hook it directly to our flat window handle
+  
         sd.Windowed = TRUE;
+
+        // msdn doesnt include the below because of zero-initialization, just doing it to be explicit
         sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
         sd.Flags = 0;
 
-        // Create the device, the context, and the swap chain canvas in one shot
+        // msdn explicitly provides a feature level (11_1, 11_0 or 10_1...), but i just use default
         HRESULT hr = D3D11CreateDeviceAndSwapChain(
             nullptr,
             D3D_DRIVER_TYPE_HARDWARE, // Force hardware GPU rendering
-            nullptr,
-            D3D11_CREATE_DEVICE_DEBUG,                
-            nullptr,
+            nullptr,    
+            D3D11_CREATE_DEVICE_DEBUG, // ! requires windows sdk installed or will crash            
+            nullptr,    // default feature level 
             0,
             D3D11_SDK_VERSION,
             &sd,
@@ -45,14 +46,27 @@ namespace Graphics{
             nullptr,
             &pContext
         );
+        if (FAILED(hr)) return false;
 
         ID3D11Texture2D* pBackBuffer = nullptr;
         pSwap->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)(&pBackBuffer));
+
         pDevice->CreateRenderTargetView(pBackBuffer, nullptr, &pRenderTargetView);
         pBackBuffer->Release();
 
+        pContext->OMSetRenderTargets(1, &pRenderTargetView, nullptr);
+
+        D3D11_VIEWPORT vp = {};
+        vp.Width = 640.0f;  // Match your window dimensions
+        vp.Height = 480.0f;
+        vp.MinDepth = 0.0f;
+        vp.MaxDepth = 1.0f;
+        vp.TopLeftX = 0.0f;
+        vp.TopLeftY = 0.0f;
+        pContext->RSSetViewports(1, &vp);
+
         // Return true if the GPU bound successfully
-        return SUCCEEDED(hr);
+        return true;
     }
 
     void EndFrame() {
@@ -73,5 +87,37 @@ namespace Graphics{
         if (pSwap)    { pSwap->Release();    pSwap = nullptr; }
         if (pDevice)  { pDevice->Release();  pDevice = nullptr; }
         
+    }
+
+    void DrawTestTriangle(){
+        // hate my life, respectfully 
+        // why the fuck didnt they just make it use a 2 item array in the first place
+
+        // 1 2d triangle at center of screen
+        struct Vertex{float x; float y;};
+        const Vertex vertices[] = {{0.0f, 0.5f}, {0.5f, -0.5f}, {-0.5f, -0.5f}};
+
+        ID3D11Buffer* pVertexBuffer;
+        D3D11_BUFFER_DESC bd = {};
+        bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        bd.Usage = D3D11_USAGE_DEFAULT;
+        bd.CPUAccessFlags = 0u;
+        bd.MiscFlags = 0u;
+        bd.ByteWidth = sizeof(vertices);
+        bd.StructureByteStride = sizeof(Vertex);
+
+        D3D11_SUBRESOURCE_DATA sd = {};
+        sd.pSysMem = vertices;
+    
+        CHECK(SUCCEEDED( pDevice->CreateBuffer(&bd, &sd, &pVertexBuffer)), "Failed to create buffer");
+
+        // Bind vertex buffer to pipeline
+        const UINT stride = sizeof(Vertex);
+        const UINT offset = 0u;
+        pContext->IASetVertexBuffers(0u, 1u, &pVertexBuffer, &stride, &offset);
+
+        pContext->Draw(3u, 0u);
+        pVertexBuffer->Release();
+        // F u 
     }
 } // namespace Graphics

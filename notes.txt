@@ -1,0 +1,117 @@
+a d3d device ALLOCS and DESTROYS objects, RENDERS primitives, and COMMUNICATES with a Graphics driver
+
+in d3d11, a device is seperated into a DEVICE object for creating resources and a DEVICE-CONTEXT object for rendering
+
+objects created by one device cannot be used directly by another device without explicitly setting up a shared resource interface
+
+Device = ID3D11Device 
+Each application must have at least one device, most use 1 device
+call D3D11CreateDevice or D3D11CreateDeviceAndSwapChain to create a device and specify the driver type with the D3D_DRIVER_TYPE flag
+each device can use one or more device contexts -> ONLY one Immediate context, and 0 or more Deferred contexts
+
+Device-Context = ID3D11DeviceContext
+a device-context is used to set pipeline state and generate rendering commands using the resources owned by the device
+
+Immediate context renders directly to the driver, only one immediate context per device, and is the main context
+D3D11CreateDevice and D3D11CreateDeviceAndSwapChain return a pointer to the immediate context as an _OUT_ parameter, they create it internally
+while ID3D11Device::GetImmediateContext returns a pointer to the immediate context, doesnt create it 
+
+A deferred context records GPU commands into a command list. A deferred context is primarily used for multithreading and is not necessary for a 
+    single-threaded application. A deferred context is generally used by a worker thread instead of the main rendering thread. 
+    When you create a deferred context, it does not inherit any state from the immediate context.
+
+A swap chain contains two or more buffers that are used for rendering and display - front buffer for DISPLAY and back for RENDER TARGET
+After the immediate context is done with rendering to the back buffer, the swap chain displays the back buffer by swapping the two buffers
+Define the characteristics of a swap chain by filling in a DXGI_SWAP_CHAIN_DESC structure and initializing an IDXGISwapChain interface. 
+Initialize a swap chain by calling IDXGIFactory::CreateSwapChain or D3D11CreateDeviceAndSwapChain.
+
+
+Resources contain data that is used by the pipeline and define what is rendered during a scene.
+    The pipeline stage are series of steps that it takes the gpu to transform a 3D resource to 2D image on screen 
+Can be loaded or created dynamically at runtime. They include texture data, vertex data, and shader data
+    Up to 128 resources can be active for each pipeline stage. Unimportant but there are 128 resource slots.
+    Resource slots can be thought of as CPU registers, except registers hold actual data, but Resource slots hold a pointer/data to the Texture/resource
+        which kinda makes sense, cos Resources can span a huge number of bytes, so each resource holds the pointer to the metadata that also contains
+        start and size of the texture. Random Info  
+    Although CPUs have different number of registers, it is 128 for D3D11, because of a contract, couldnt care less abt the details, Unimportant
+D3D returns 0 for any resource accessed out of bounds. So, instead of getting garbage, crashing/sefaulting, or corrupting memory, you get 0. Nice
+
+Buffers are resources, like textures, they are data. Types of buffers:
+    Vertex Buffer
+    Index Buffer
+    Constant Buffer
+A vertex buffer contains the vertex data used to define geometry. Vertex data includes position coordinates, color data, 
+    texture coordinate data, normal data, e.t.c.
+    The simplest example of a vertex buffer is one that only contains position data.  
+    To access data from a vertex buffer you need to know WHICH VERTEX to access, plus the following additional buffer parameters:
+        Offset: the number of bytes from the start of the buffer to the data for the first vertex. Can be specified with the 
+            ID3D11DeviceContext::IASetVertexBuffers method
+        BaseVertexLocation: a value added to each index before reading a vertex from the vertex buffer.
+    Before you create a vertex buffer, you need to define its layout by creating an ID3D11InputLayout interface; this is done by calling the 
+    ID3D11Device::CreateInputLayout method. After the input-layout object is created, you can bind it to the input-assembler stage by calling the 
+    ID3D11DeviceContext::IASetInputLayout.
+    To create a vertex buffer, call ID3D11Device::CreateBuffer.
+
+
+Steps:
+Initing 
+-   Create a win32 window
+-   Create a device, immediate context, swap chain https://learn.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-devices-initialize
+-   Get the back buffer swapChain->GetBuffer(...)
+-   Create a render-target view by calling ID3D11Device::CreateRenderTargetView and bind the back-buffer as a render target by calling 
+        ID3D11DeviceContext::OMSetRenderTargets. https://learn.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-devices-initialize
+-   Create a viewport to define which parts of the render target will be visible. Define the viewport using the D3D11_VIEWPORT structure and 
+        set the viewport using the ID3D11DeviceContext::RSSetViewports 
+        method. https://learn.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-devices-initialize
+
+Using a resource
+-   Create a resource using one of the create methods of the ID3D11Device interface.
+        https://learn.microsoft.com/en-us/windows/desktop/api/D3D11/nn-d3d11-id3d11device
+        device->CreateBuffer to contain a vertex buffer (or any other buffers)
+-   Bind a resource to the pipeline using a CONTEXT and ONE of the set methods of the ID3D11DeviceContext interface.
+        https://learn.microsoft.com/en-us/windows/desktop/api/D3D11/nn-d3d11-id3d11device
+-   Deallocate the resource with ->Release();
+
+Adding shaders
+Vertex and pixel shaders are needed
+-   Compile the shaders with D3DCompile(...) or precompile with .cso files
+-   Create them 
+        device->CreateVertexShader(...)
+        device->CreatePixelShader(...)
+-   Bind them 
+        context->VSSetShader(...)
+        context->PSSetShader(...)
+-   Prolly missing something, like input layout so confusing, so skipping for now
+-   Bind the vertex buffer: context->IASetVertexBuffers(...)
+
+Draw
+-   context->Draw(...);
+
+Present
+-   swapChain->Present(...);
+
+-------------------------------------------------------------------------------
+Window
+↓
+Device
+Context
+SwapChain
+↓
+Back Buffer
+↓
+Render Target View
+↓
+Viewport
+↓
+Vertex Buffer
+↓
+Vertex Shader
+Pixel Shader
+↓
+Input Layout
+↓
+Primitive Topology
+↓
+Draw()
+↓
+Present()

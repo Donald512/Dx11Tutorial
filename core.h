@@ -47,6 +47,7 @@ namespace Graphics{
     void Shutdown();
     void EndFrame();
     void ClearBuffer(float red, float green, float blue);
+    void DrawTestTriangle();
 
 }
 
